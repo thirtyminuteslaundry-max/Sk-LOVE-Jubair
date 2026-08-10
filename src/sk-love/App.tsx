@@ -22765,7 +22765,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                               if (hostCohostVideos.length === 0) return null;
 
                               return (
-                                <div className="absolute right-3 bottom-[72px] z-40 grid w-20 grid-cols-1 gap-1.5">
+                                <div className="pointer-events-auto absolute right-3 bottom-[72px] z-50 grid w-20 grid-cols-1 gap-1.5">
                                   {hostCohostVideos.map(({ uid, name, avatar, track }) => {
                                     const activeTrack = track || liveRemoteVideoTracksRef.current[uid];
                                     const cohostCoins = partySeatSessionCoins[Number(uid)] || 0;
@@ -23165,7 +23165,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                             {isLiveCommentsOpen && comments.length > 0 && (
                               <div
                                 ref={hostCommentsContainerRef}
-                                className="max-h-28 max-w-[100%] space-y-1.5 overflow-y-auto p-1 scrollbar-none overscroll-contain"
+                                className="max-h-28 max-w-[calc(100%-92px)] space-y-1.5 overflow-y-auto p-1 scrollbar-none overscroll-contain"
                               >
                                 {comments.map((comment, index) => {
                                   const isGift = comment.badge === "Gift" || comment.text.includes("sent ");
@@ -24325,7 +24325,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                             const showSelf = streamRole === "cohost";
                             if (!showSelf && otherCohostVideos.length === 0) return null;
                             return (
-                              <div className="pointer-events-auto absolute right-3 bottom-[66px] z-40 flex flex-col items-end gap-1.5">
+                              <div className="pointer-events-auto absolute right-3 bottom-[66px] z-50 flex flex-col items-end gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => setIsLiveCohostTrayOpen((current) => !current)}
@@ -24728,7 +24728,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                           {isLiveCommentsOpen && (
                             <div
                               ref={guestCommentsContainerRef}
-                              className="max-h-28 max-w-[100%] space-y-1.5 overflow-y-auto p-1 scrollbar-none overscroll-contain"
+                              className="max-h-28 max-w-[calc(100%-92px)] space-y-1.5 overflow-y-auto p-1 scrollbar-none overscroll-contain"
                             >
                               {comments.map((comment, index) => {
                                 const isGift = comment.badge === "Gift" || comment.text.includes("sent ");
