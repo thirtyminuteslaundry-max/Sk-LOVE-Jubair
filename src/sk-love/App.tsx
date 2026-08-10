@@ -7836,7 +7836,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         ...prev,
         diamonds: revertedBalance,
       }));
-      const serverMsg = e?.response?.data?.message || "গিফট পাঠানো সম্ভব হচ্ছে না। দয়া করে আবার চেষ্টা করুন।";
+      const serverMsg = e?.message || e?.data?.message || e?.response?.data?.message || "গিফট পাঠানো সম্ভব হচ্ছে না। দয়া করে আবার চেষ্টা করুন।";
       try { toast.error(serverMsg); } catch {}
       setToastAlert(serverMsg);
       setTimeout(() => setToastAlert(null), 3500);
