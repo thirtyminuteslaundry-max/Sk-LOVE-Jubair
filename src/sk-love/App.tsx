@@ -8424,7 +8424,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         } as any;
       }
     });
-    // FIX: Keep our locally-known seat visible briefly (10s grace period) until backend confirms or clears it.
+    // FIX: Keep our locally-known seat visible persistently until user explicitly leaves or another user takes it.
     const opt = optimisticPartySeatRef.current;
     const activeRoomId = room?.id ? Number(room.id) : null;
     if (opt && activeRoomId && opt.roomId && Number(opt.roomId) !== Number(activeRoomId)) {
@@ -8440,35 +8440,21 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         const isOccupiedByOther =
           Boolean(backendSeat.occupant || backendSeat.userId) && !isSelfInBackend;
 
-        if (isSelfInBackend) {
-          // Backend has confirmed our seat!
-          (opt as any).confirmed = true;
-        }
-
         if (isOccupiedByOther) {
           // Someone else is on this seat -> clear optimistic seat
           optimisticPartySeatRef.current = null;
-        } else if (!backendSeat.occupant && !backendSeat.userId) {
-          // Backend returned empty seat.
-          // If we were previously confirmed by backend, or if the 10s grace period expired:
-          // it means the host kicked us or we were removed -> clear optimistic seat!
-          const isConfirmed = Boolean((opt as any).confirmed);
-          const gracePeriodExpired = Date.now() > opt.until;
-          if (isConfirmed || gracePeriodExpired) {
-            optimisticPartySeatRef.current = null;
-          } else {
-            // Still in initial 10s grace period right after joining
-            nextSeats[idx] = {
-              ...backendSeat,
-              userId: opt.userId ?? backendSeat.userId,
-              occupant: opt.occupant ?? backendSeat.occupant,
-              icon: opt.icon ?? backendSeat.icon,
-              frameId: (opt as any).frame ?? backendSeat.frameId ?? (backendSeat as any).avatarFrame,
-              frame: (opt as any).frame ?? backendSeat.frame,
-              avatarFrame: (opt as any).frame ?? backendSeat.avatarFrame,
-              muted: backendSeat.muted || false,
-            } as any;
-          }
+        } else {
+          // Preserve our local seat occupancy so polling never wipes the user/host from their seat
+          nextSeats[idx] = {
+            ...backendSeat,
+            userId: opt.userId ?? backendSeat.userId ?? (currentUserIdForPartyState ? Number(currentUserIdForPartyState) : null),
+            occupant: opt.occupant ?? backendSeat.occupant ?? (registerName || "User"),
+            icon: opt.icon ?? backendSeat.icon ?? profileAvatarImg ?? null,
+            frameId: (opt as any).frame ?? backendSeat.frameId ?? (backendSeat as any).avatarFrame ?? null,
+            frame: (opt as any).frame ?? backendSeat.frame ?? null,
+            avatarFrame: (opt as any).frame ?? backendSeat.avatarFrame ?? null,
+            muted: partySeatMuteOverrideRef.current[idx]?.muted ?? backendSeat.muted ?? false,
+          } as any;
         }
       }
     }
