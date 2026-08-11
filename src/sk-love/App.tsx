@@ -715,11 +715,11 @@ export default function App() {
   // ---- হ্যান্ডলার: রোল রিকোয়েস্ট (determineUserRole) ----
   const determineUserRole = (email: string): UserRole => {
     const e = email.toLowerCase().trim();
-    if (e === "admin@sklove.app" || e.includes("admin")) {
+    if (e === "admin@sklove.app" || e === "admin@sklove.com" || e === "zubayer_admin") {
       return "admin";
     } else if (e.includes("reseller")) {
       return "reseller";
-    } else if (e.includes("agent")) {
+    } else if (e.includes("agent") || e.includes("agency")) {
       return "agent";
     } else {
       return "user";
@@ -20795,16 +20795,38 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                       resolvedFromUser && resolvedFromUser !== "user"
                                         ? resolvedFromUser
                                         : userRole;
+                                    const isHostUser = Boolean(
+                                      selectedProfileUser?.isHost ||
+                                        selectedProfileUser?.hostVerified ||
+                                        selectedProfileUser?.is_host ||
+                                        selectedProfileUser?.host_status === "approved" ||
+                                        hostAgencyStatus === "active",
+                                    );
+                                    const label =
+                                      effectiveRole === "admin"
+                                        ? "Main Admin"
+                                        : effectiveRole === "reseller"
+                                          ? "Official Reseller"
+                                          : effectiveRole === "agent"
+                                            ? "Official Agency"
+                                            : isHostUser
+                                              ? "Official Host"
+                                              : "Regular User";
+                                    const badgeClass =
+                                      effectiveRole === "admin"
+                                        ? "bg-gradient-to-r from-indigo-600/30 to-rose-600/30 text-rose-300 border border-rose-500/30"
+                                        : effectiveRole === "reseller"
+                                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                          : effectiveRole === "agent"
+                                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                            : isHostUser
+                                              ? "bg-pink-500/20 text-pink-300 border border-pink-500/40"
+                                              : "bg-slate-900 border border-slate-800 text-slate-400";
+
                                     return (
                                       <>
-                                        <span className="bg-gradient-to-r from-indigo-600/30 to-rose-600/30 text-rose-300 border border-rose-500/30 text-[8px] font-extrabold px-3 py-0.5 rounded-full uppercase tracking-wider">
-                                          {effectiveRole === "admin"
-                                            ? "Main Admin"
-                                            : effectiveRole === "reseller"
-                                              ? "Official Reseller"
-                                              : effectiveRole === "agent"
-                                                ? "Official Agency"
-                                                : "Regular User"}
+                                        <span className={`${badgeClass} text-[8px] font-extrabold px-3 py-0.5 rounded-full uppercase tracking-wider`}>
+                                          {label}
                                         </span>
                                         {effectiveRole === "reseller" && (
                                           <button
@@ -20829,6 +20851,12 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                               ) : (
                                 (() => {
                                   const otherRole = getRoleFromUser(selectedProfileUser);
+                                  const isHostOther = Boolean(
+                                    selectedProfileUser?.isHost ||
+                                      selectedProfileUser?.hostVerified ||
+                                      selectedProfileUser?.is_host ||
+                                      selectedProfileUser?.host_status === "approved",
+                                  );
                                   const label =
                                     otherRole === "admin"
                                       ? "Main Admin"
@@ -20836,8 +20864,8 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                         ? "Official Reseller"
                                         : otherRole === "agent"
                                           ? "Official Agency"
-                                          : (selectedProfileUser.vipLevel || 0) >= 4
-                                            ? "Creator / Host"
+                                          : isHostOther
+                                            ? "Official Host"
                                             : "Regular User";
                                   const pillClass =
                                     otherRole === "admin"
@@ -20846,7 +20874,9 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                         ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                                         : otherRole === "agent"
                                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                          : "bg-slate-900 border border-slate-800 text-slate-400";
+                                          : isHostOther
+                                            ? "bg-pink-500/20 text-pink-300 border border-pink-500/40"
+                                            : "bg-slate-900 border border-slate-800 text-slate-400";
                                   return (
                                     <span className={`${pillClass} text-[8.5px] font-extrabold px-3 py-0.5 rounded-full uppercase tracking-wider`}>
                                       {label}
@@ -29405,16 +29435,18 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                       onClick={() => {
                         const cachedUser = JSON.parse(localStorage.getItem("sk_love_user") || "{}");
                         const selfProfileObj = {
-                          id: getCurrentUserId() || cachedUser?.id || 77777,
-                          name: registerName || "Zubair Mahmud",
-                          username: registerEmail ? registerEmail.split("@")[0] : "zubayer_admin",
+                          id: getCurrentUserId() || cachedUser?.id || 10001,
+                          name: registerName || cachedUser?.name || "User",
+                          username: registerEmail ? registerEmail.split("@")[0] : cachedUser?.username || "user",
                           vipLevel: userWallet.vipLevel,
                           status: "Online",
                           avatar: profileAvatarImg || cachedUser?.avatar || cachedUser?.avatarImg || "",
                           cover: profileCoverImg || cachedUser?.cover || cachedUser?.coverImg || "",
                           rCoins: userWallet.rCoins,
                           diamonds: userWallet.diamonds,
-                          bio: "Lead Developer & Admin of SK Love App 💖",
+                          bio: userBio || cachedUser?.bio || "Welcome to SK Love App 💖",
+                          role: cachedUser?.role || userRole,
+                          isHost: cachedUser?.isHost || cachedUser?.hostVerified || cachedUser?.is_host || false,
                         };
                         setSelectedProfileUser(selfProfileObj);
                         setAppSection("profile");
@@ -29435,16 +29467,18 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                     { left: "89%", label: "Profile", onClick: () => {
                       const cachedUser = JSON.parse(localStorage.getItem("sk_love_user") || "{}");
                       const selfProfileObj = {
-                        id: getCurrentUserId() || cachedUser?.id || 77777,
-                        name: registerName || "Zubair Mahmud",
-                        username: registerEmail ? registerEmail.split("@")[0] : "zubayer_admin",
+                        id: getCurrentUserId() || cachedUser?.id || 10001,
+                        name: registerName || cachedUser?.name || "User",
+                        username: registerEmail ? registerEmail.split("@")[0] : cachedUser?.username || "user",
                         vipLevel: userWallet.vipLevel,
                         status: "Online",
                         avatar: profileAvatarImg || cachedUser?.avatar || cachedUser?.avatarImg || "",
                         cover: profileCoverImg || cachedUser?.cover || cachedUser?.coverImg || "",
                         rCoins: userWallet.rCoins,
                         diamonds: userWallet.diamonds,
-                        bio: "Lead Developer & Admin of SK Love App 💖",
+                        bio: userBio || cachedUser?.bio || "Welcome to SK Love App 💖",
+                        role: cachedUser?.role || userRole,
+                        isHost: cachedUser?.isHost || cachedUser?.hostVerified || cachedUser?.is_host || false,
                       };
                       setSelectedProfileUser(selfProfileObj);
                       setAppSection("profile");
