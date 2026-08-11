@@ -8265,28 +8265,77 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       (roomIdForHostGuard && locallyHostedPartyRoomIdsRef.current.has(roomIdForHostGuard)) ||
       (hostIdForHostGuard && currentUserIdForHostGuard && hostIdForHostGuard === Number(currentUserIdForHostGuard))
     );
-    const normalizedHostName =
+    const existingHostName =
+      activePartyRoom?.hostName && activePartyRoom.hostName !== "Host"
+        ? activePartyRoom.hostName
+        : null;
+    const existingHostAvatar = activePartyRoom?.hostAvatar || null;
+    const existingHostId = activePartyRoom?.hostId || null;
+    const existingHostDisplayId = activePartyRoom?.hostDisplayId || null;
+
+    const rawHostName =
       room.hostName ??
       room.host_name ??
       room.hostUser?.name ??
+      room.hostUser?.nickname ??
+      room.host_user?.name ??
       room.host?.name ??
+      room.host?.nickname ??
       room.user?.name ??
+      room.user?.nickname ??
+      room.owner?.name ??
+      room.creator?.name ??
       (isSelfHostRoom ? (registerName || "Host") : null);
-    const normalizedHostAvatar =
+
+    const normalizedHostName =
+      rawHostName && rawHostName !== "Host"
+        ? rawHostName
+        : (existingHostName || rawHostName || "Host");
+
+    const rawHostAvatar =
       room.hostAvatar ??
       room.host_avatar ??
-      room.hostUser?.avatar ??
       room.host_avatar_url ??
+      room.hostUser?.avatar ??
       room.hostUser?.avatar_url ??
+      room.hostUser?.profile_photo_url ??
+      room.host_user?.avatar ??
+      room.host_user?.avatar_url ??
       room.host?.avatar ??
+      room.host?.avatar_url ??
       room.user?.avatar ??
+      room.user?.avatar_url ??
+      room.owner?.avatar ??
+      room.creator?.avatar ??
       (isSelfHostRoom ? profileAvatarImg : null);
-    const normalizedHostId =
-      hostIdForHostGuard || (isSelfHostRoom && currentUserIdForHostGuard ? Number(currentUserIdForHostGuard) : null);
 
-    room.hostName = normalizedHostName || room.hostName || "Host";
-    room.hostAvatar = normalizedHostAvatar || room.hostAvatar;
-    room.hostId = normalizedHostId || room.hostId;
+    const normalizedHostAvatar = rawHostAvatar || existingHostAvatar || null;
+
+    const rawHostId =
+      hostIdForHostGuard ||
+      (room.hostId ??
+        room.host_id ??
+        room.host_user_id ??
+        room.user_id ??
+        room.hostUser?.id ??
+        room.host_user?.id ??
+        room.host?.id ??
+        room.user?.id ??
+        room.owner?.id ??
+        room.creator?.id ??
+        (isSelfHostRoom && currentUserIdForHostGuard ? Number(currentUserIdForHostGuard) : null));
+
+    const normalizedHostId =
+      rawHostId && Number(rawHostId) > 0
+        ? Number(rawHostId)
+        : (existingHostId ? Number(existingHostId) : null);
+
+    room.hostName = normalizedHostName;
+    room.hostAvatar = normalizedHostAvatar;
+    room.hostId = normalizedHostId;
+    if (!room.hostDisplayId && existingHostDisplayId) {
+      room.hostDisplayId = existingHostDisplayId;
+    }
 
     setActivePartyRoom(room);
     // Batch 2: read host-broadcast theme code (host applies to all viewers).
@@ -8498,19 +8547,26 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         }
       }
     }
-    // FIX (Host visibility): Crown seat (seat 0) is the host seat. If seat 0 is empty from backend seats,
+    // FIX (Host visibility): Crown seat (seat 0) is the host seat. If seat 0 is empty or generic from backend seats,
     // populate it with room host info so EVERY viewer instantly sees the host on seat 0.
-    if (!nextSeats[0].occupant && normalizedHostName) {
-      const hostFrameToUse = room.hostFrame ?? room.host_frame ?? (isSelfHostRoom ? equippedAvatarFrame : null);
+    const seat0Occ = nextSeats[0].occupant;
+    const isSeat0Generic = !seat0Occ || seat0Occ === "Host" || seat0Occ === "User" || seat0Occ === "Guest";
+    if (isSeat0Generic && normalizedHostName) {
+      const hostFrameToUse =
+        room.hostFrame ??
+        room.host_frame ??
+        room.hostUser?.avatarFrame ??
+        room.hostUser?.frame ??
+        (isSelfHostRoom ? equippedAvatarFrame : null);
       nextSeats[0] = {
         seatNum: 1,
-        userId: normalizedHostId ? Number(normalizedHostId) : null,
+        userId: normalizedHostId ? Number(normalizedHostId) : nextSeats[0].userId,
         occupant: normalizedHostName,
-        icon: normalizedHostAvatar || null,
-        muted: partySeatMuteOverrideRef.current[0]?.muted ?? false,
-        frameId: hostFrameToUse,
-        frame: hostFrameToUse,
-        avatarFrame: hostFrameToUse,
+        icon: normalizedHostAvatar || nextSeats[0].icon || null,
+        muted: partySeatMuteOverrideRef.current[0]?.muted ?? nextSeats[0].muted ?? false,
+        frameId: hostFrameToUse || nextSeats[0].frameId,
+        frame: hostFrameToUse || nextSeats[0].frame,
+        avatarFrame: hostFrameToUse || nextSeats[0].avatarFrame,
       } as any;
     }
     const currentUserIdForPartyState = getCurrentUserId();
@@ -15933,22 +15989,37 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
               }}
             >
               <div className="flex min-w-0 items-center gap-2 rounded-full bg-[#0b0620] pl-1 pr-3 py-[3px] w-full">
-                <img
-                  src={getUserAvatarUrl({
-                    name: activePartyRoom?.hostName || "Host",
-                    avatar: activePartyRoom?.hostAvatar,
-                  })}
-                  alt={activePartyRoom?.hostName || "Host"}
-                  className="h-9 w-9 rounded-full object-cover ring-2 ring-white/15 shrink-0"
-                />
-                <div className="min-w-0 leading-tight">
-                  <p className="truncate text-[13px] font-black text-white">
-                    {activePartyRoom?.hostName || "Host"}
-                  </p>
-                  <p className="truncate text-[9.5px] font-semibold text-slate-300/80 tabular-nums">
-                    ID: {resolveHostDisplayId(activePartyRoom)}
-                  </p>
-                </div>
+                {(() => {
+                  const displayHostName =
+                    activePartyRoom?.hostName && activePartyRoom.hostName !== "Host"
+                      ? activePartyRoom.hostName
+                      : (partySeats?.[0]?.occupant || (isActivePartyHost ? registerName : "Host"));
+                  const displayHostAvatar =
+                    activePartyRoom?.hostAvatar ||
+                    partySeats?.[0]?.icon ||
+                    partySeats?.[0]?.avatar ||
+                    (isActivePartyHost ? profileAvatarImg : null);
+                  return (
+                    <>
+                      <img
+                        src={getUserAvatarUrl({
+                          name: displayHostName,
+                          avatar: displayHostAvatar,
+                        })}
+                        alt={displayHostName}
+                        className="h-9 w-9 rounded-full object-cover ring-2 ring-white/15 shrink-0"
+                      />
+                      <div className="min-w-0 leading-tight">
+                        <p className="truncate text-[13px] font-black text-white">
+                          {displayHostName}
+                        </p>
+                        <p className="truncate text-[9.5px] font-semibold text-slate-300/80 tabular-nums">
+                          ID: {resolveHostDisplayId(activePartyRoom)}
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -16233,12 +16304,13 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                     ? Number(activePartyRoom.host_id)
                     : null;
                   const _hostName =
-                    activePartyRoom?.hostName ??
-                    activePartyRoom?.host_name ??
-                    activePartyRoom?.hostUser?.name ??
-                    activePartyRoom?.host?.name ??
-                    activePartyRoom?.user?.name ??
-                    (isActivePartyHost ? (registerName || "Host") : null);
+                    (activePartyRoom?.hostName && activePartyRoom.hostName !== "Host")
+                      ? activePartyRoom.hostName
+                      : (activePartyRoom?.host_name ??
+                        activePartyRoom?.hostUser?.name ??
+                        activePartyRoom?.host?.name ??
+                        activePartyRoom?.user?.name ??
+                        (isActivePartyHost ? (registerName || "Host") : null));
                   const _hostAvatar =
                     activePartyRoom?.hostAvatar ??
                     activePartyRoom?.host_avatar ??
