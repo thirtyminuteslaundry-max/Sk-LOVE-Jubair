@@ -8531,20 +8531,11 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       }
     });
 
-    // FIX (Guest seats persistence): Retain known seated guests across polling
-    // if backend seats response temporarily omits them.
-    for (let idx = 1; idx < nextSeats.length; idx++) {
-      if (!nextSeats[idx].occupant) {
-        const prevSeat = partySeatsRef.current[idx];
-        const vacatedTs = vacatedPartySeatsRef.current.get(idx);
-        const isVacatedRecently = Boolean(vacatedTs && Date.now() - vacatedTs < 20000);
-        if (prevSeat && prevSeat.occupant && !isVacatedRecently) {
-          nextSeats[idx] = { ...prevSeat };
-        }
-      } else {
-        vacatedPartySeatsRef.current.delete(idx);
-      }
-    }
+    // Clean seat state: Seats remain empty until explicitly taken by host or guest.
+    // Server room.seats + optimisticPartySeatRef is the single source of truth.
+    const currentUserIdForPartyState = getCurrentUserId();
+    const selfNameForPartyState = (registerName || "").trim();
+
     // FIX: Keep our locally-known seat visible persistently until user explicitly leaves or another user takes it.
     const opt = optimisticPartySeatRef.current;
     const activeRoomId = room?.id ? Number(room.id) : null;
@@ -8579,9 +8570,6 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         }
       }
     }
-    // Clean seat state: Seats remain empty until explicitly taken by host or guest.
-    const currentUserIdForPartyState = getCurrentUserId();
-    const selfNameForPartyState = (registerName || "").trim();
     const holdActive = partyMicMuteHoldRef.current && Date.now() < partyMicMuteHoldRef.current.until;
     const mySeat = nextSeats.find((seat) =>
       (seat.userId && currentUserIdForPartyState && Number(seat.userId) === Number(currentUserIdForPartyState)) ||
