@@ -8635,38 +8635,38 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     });
 
     // FIX (Single-seat rule): Ensure no user occupies multiple seats simultaneously.
-    const userSeatMap = new Map<string, number>();
+    const seenUserIds = new Set<number>();
+    const seenUserNames = new Set<string>();
     const optSeat = optimisticPartySeatRef.current;
     if (optSeat && optSeat.seatIndex >= 0 && optSeat.seatIndex < nextSeats.length) {
-      const optUserKey = optSeat.userId
-        ? `uid:${optSeat.userId}`
-        : (optSeat.occupant ? `name:${optSeat.occupant.trim().toLowerCase()}` : null);
-      if (optUserKey) {
-        userSeatMap.set(optUserKey, optSeat.seatIndex);
-      }
+      if (optSeat.userId) seenUserIds.add(Number(optSeat.userId));
+      if (optSeat.occupant) seenUserNames.add(optSeat.occupant.trim().toLowerCase());
     }
 
     for (let i = 0; i < nextSeats.length; i++) {
       const s = nextSeats[i];
       if (!s || (!s.occupant && !s.userId)) continue;
-      const userKey = s.userId
-        ? `uid:${s.userId}`
-        : (s.occupant ? `name:${String(s.occupant).trim().toLowerCase()}` : null);
-      if (!userKey) continue;
 
-      if (!userSeatMap.has(userKey)) {
-        userSeatMap.set(userKey, i);
-      } else {
-        const keepIdx = userSeatMap.get(userKey)!;
-        if (keepIdx !== i) {
+      const sUid = s.userId ? Number(s.userId) : null;
+      const sName = s.occupant ? String(s.occupant).trim().toLowerCase() : null;
+
+      const isDuplicateUid = Boolean(sUid && seenUserIds.has(sUid));
+      const isDuplicateName = Boolean(sName && seenUserNames.has(sName));
+
+      if (isDuplicateUid || isDuplicateName) {
+        if (!optSeat || optSeat.seatIndex !== i) {
           nextSeats[i] = {
             ...nextSeats[i],
             occupant: null,
             icon: null,
             userId: null,
           };
+          continue;
         }
       }
+
+      if (sUid) seenUserIds.add(sUid);
+      if (sName) seenUserNames.add(sName);
     }
     partySeatsRef.current = nextSeats;
     setPartySeats(nextSeats);
@@ -10669,11 +10669,12 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
   // ─────────── New party-seat helpers (host seat mgmt, suspend, self-mute, emoji) ───────────
   const getMyPartySeatIndex = (): number => {
     const uid = getCurrentUserId();
-    const selfName = (registerName || "You").trim();
-    return partySeats.findIndex(
+    const selfName = (registerName || "You").trim().toLowerCase();
+    const seatsToSearch = (partySeatsRef.current && partySeatsRef.current.length > 0) ? partySeatsRef.current : partySeats;
+    return seatsToSearch.findIndex(
       (s: any) =>
         (s?.userId && uid && Number(s.userId) === Number(uid)) ||
-        (s?.occupant && selfName && String(s.occupant).trim() === selfName),
+        (s?.occupant && selfName && String(s.occupant).trim().toLowerCase() === selfName),
     );
   };
 
