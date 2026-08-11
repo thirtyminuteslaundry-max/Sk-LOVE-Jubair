@@ -8327,12 +8327,25 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       icon: null as string | null,
       muted: false,
     }));
-    (room.seats || []).forEach((seat: any) => {
+    (room.seats || []).forEach((seat: any, i: number) => {
       // Backend may return camelCase or DB snake_case fields depending on
       // PartyRoomController::show(). Normalize here so host/guest views both
       // render booked seats even when the API returns raw table rows.
-      const rawSeatNum = seat.seatNum ?? seat.seat_num ?? seat.number ?? seat.seat;
-      const index = Number(rawSeatNum || 0) - 1;
+      let index = -1;
+      if (seat.seatIndex !== undefined && seat.seatIndex !== null) {
+        index = Number(seat.seatIndex);
+      } else if (seat.seat_index !== undefined && seat.seat_index !== null) {
+        index = Number(seat.seat_index);
+      } else if (seat.index !== undefined && seat.index !== null) {
+        index = Number(seat.index);
+      } else {
+        const rawSeatNum = seat.seatNum ?? seat.seat_num ?? seat.seat_number ?? seat.number ?? seat.seat;
+        if (rawSeatNum !== undefined && rawSeatNum !== null) {
+          index = Number(rawSeatNum) - 1;
+        } else if (i >= 0 && i < nextSeats.length) {
+          index = i;
+        }
+      }
       if (index >= 0 && index < nextSeats.length) {
         const seatUser = seat.user ?? seat.member ?? seat.occupantUser ?? null;
         const normalizedUserId =
@@ -8574,6 +8587,68 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                   triggerPartyEntryAnimation(entryUserName, entryAvatar, entryRideId);
                 }
               }
+            }
+          }
+        }
+
+        // 1c. SEAT JOIN/LEAVE BROADCAST ACROSS ALL VIEWERS
+        if (m.text.includes("[SEAT:")) {
+          const startIdx = m.text.indexOf("[SEAT:");
+          const endIdx = m.text.indexOf("]", startIdx);
+          if (startIdx !== -1 && endIdx !== -1) {
+            const tagContent = m.text.slice(startIdx + 6, endIdx);
+            const parts = tagContent.split(":");
+            if (parts.length >= 2) {
+              const seatIdx = Number(parts[0]);
+              const actionOrName = parts[1];
+              if (seatIdx >= 0 && seatIdx < 21) {
+                if (actionOrName === "LEAVE") {
+                  setPartySeats((prev) =>
+                    prev.map((s, idx) =>
+                      idx === seatIdx ? { ...s, occupant: null, icon: null, userId: null } : s
+                    )
+                  );
+                } else {
+                  let occName = actionOrName;
+                  try { occName = decodeURIComponent(occName); } catch {}
+                  let occIcon = parts[2] ? decodeURIComponent(parts[2]) : null;
+                  let occFrame = parts[3] ? decodeURIComponent(parts[3]) : null;
+                  if (occName) {
+                    setPartySeats((prev) =>
+                      prev.map((s, idx) =>
+                        idx === seatIdx
+                          ? {
+                              ...s,
+                              occupant: occName,
+                              icon: occIcon || s.icon,
+                              frame: occFrame || s.frame,
+                              frameId: occFrame || s.frameId,
+                            }
+                          : s
+                      )
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 1d. TEXT "took seat X" BACKUP SYNC ACROSS ALL VIEWERS
+        if (m.text.includes("took seat ")) {
+          const seatMatch = m.text.match(/took seat (\d+)/i);
+          if (seatMatch) {
+            const seatNum = Number(seatMatch[1]);
+            const seatIdx = seatNum - 1;
+            const senderName = m.name || "Guest";
+            if (seatIdx >= 0 && seatIdx < 21) {
+              setPartySeats((prev) =>
+                prev.map((s, idx) =>
+                  idx === seatIdx && (!s.occupant || s.occupant === "User" || s.occupant === "Guest")
+                    ? { ...s, occupant: senderName }
+                    : s
+                )
+              );
             }
           }
         }
@@ -9366,6 +9441,17 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       // even when our own join just succeeded.
       applyPartyRoomState(data?.data);
 
+      if (activePartyRoom?.id) {
+        const selfName = registerName || "User";
+        const selfIcon = profileAvatarImg || "";
+        const frameToUse = equippedAvatarFrame || "none";
+        void api
+          .post(`/api/party-rooms/${activePartyRoom.id}/chat`, {
+            text: `[SEAT:${seatIndex}:${shouldLeave ? "LEAVE" : encodeURIComponent(selfName)}:${encodeURIComponent(selfIcon)}:${encodeURIComponent(frameToUse)}]`,
+          })
+          .catch(() => undefined);
+      }
+
       if (!shouldLeave) {
         void publishPreparedPartyMicrophone();
       }
@@ -9630,7 +9716,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         }
         void api
           .post(`/api/party-rooms/${activePartyRoom.id}/chat`, {
-            text: `[ENTRY:${rideToUse}:${encodeURIComponent(selfName)}:${encodeURIComponent(profileAvatarImg || "")}:${encodeURIComponent(frameToUse)}] ✨ ${selfName} took seat ${seatIndex + 1} ${equippedRide ? `with ${rideLabel}` : ""}!`,
+            text: `[SEAT:${seatIndex}:${encodeURIComponent(selfName)}:${encodeURIComponent(profileAvatarImg || "")}:${encodeURIComponent(frameToUse)}] [ENTRY:${rideToUse}:${encodeURIComponent(selfName)}:${encodeURIComponent(profileAvatarImg || "")}:${encodeURIComponent(frameToUse)}] ✨ ${selfName} took seat ${seatIndex + 1} ${equippedRide ? `with ${rideLabel}` : ""}!`,
           })
           .catch(() => undefined);
       }
