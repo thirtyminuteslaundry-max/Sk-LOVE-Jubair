@@ -22720,130 +22720,6 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                         : "all-none"
                               }`}
                             />
-                            {(() => {
-                              const hostIdNum = Number(activeLiveRoom?.hostId ?? 0);
-                              const myIdNum = Number(getCurrentUserId() ?? 0);
-
-                              const map = new Map<string, { uid: string; name: string; avatar: string | null; track: any | null }>();
-
-                              (liveCohosts || []).forEach((c: any) => {
-                                const uidStr = String(c?.userId ?? c?.user_id ?? c?.user?.id ?? c?.id ?? "").trim();
-                                const uidNum = Number(uidStr);
-                                if (!uidStr) return;
-                                if (hostIdNum && uidNum === hostIdNum) return;
-                                if (myIdNum && uidNum === myIdNum) return;
-                                map.set(uidStr, {
-                                  uid: uidStr,
-                                  name: c.name || `Guest ${uidStr}`,
-                                  avatar: c.avatar || null,
-                                  track: liveRemoteVideoTracksRef.current[uidStr] || null,
-                                });
-                              });
-
-                              (liveRemoteVideos || []).forEach((v) => {
-                                const uidStr = String(v.uid ?? "").trim();
-                                const uidNum = Number(uidStr);
-                                if (!uidStr) return;
-                                if (hostIdNum && uidNum === hostIdNum) return;
-                                if (myIdNum && uidNum === myIdNum) return;
-                                if (!map.has(uidStr)) {
-                                  map.set(uidStr, {
-                                    uid: uidStr,
-                                    name: v.name || getRemoteCohostMeta(uidStr).name,
-                                    avatar: v.avatar || getRemoteCohostMeta(uidStr).avatar,
-                                    track: v.track || liveRemoteVideoTracksRef.current[uidStr] || null,
-                                  });
-                                } else {
-                                  const existing = map.get(uidStr)!;
-                                  if (v.track && !existing.track) {
-                                    existing.track = v.track;
-                                  }
-                                }
-                              });
-
-                              const hostCohostVideos = Array.from(map.values());
-                              if (hostCohostVideos.length === 0) return null;
-
-                              return (
-                                <div className="pointer-events-auto absolute right-3 bottom-[72px] z-50 grid w-20 grid-cols-1 gap-1.5">
-                                  {hostCohostVideos.map(({ uid, name, avatar, track }) => {
-                                    const activeTrack = track || liveRemoteVideoTracksRef.current[uid];
-                                    const cohostCoins = partySeatSessionCoins[Number(uid)] || 0;
-                                    const myCurrentUidStr = String(getCurrentUserId() || "");
-                                    const isRemoteMicMuted = remoteMutedAudioUids.includes(String(uid)) || (String(uid) === myCurrentUidStr && isStreamMicMuted);
-                                    const isRemoteCamOff = !activeTrack || remoteCameraOffUids.includes(String(uid)) || (String(uid) === myCurrentUidStr && isStreamCameraOff);
-
-                                    return (
-                                      <div
-                                        key={`host-remote-${uid}`}
-                                        onClick={() => {
-                                          const gId = Number(uid);
-                                          setCohostManageUser({
-                                            userId: gId,
-                                            name: name || `Guest ${gId}`,
-                                            avatar: avatar || null,
-                                          });
-                                        }}
-                                        role="button"
-                                        tabIndex={0}
-                                        aria-label="Manage or gift co-host"
-                                        title="Tap to manage co-host"
-                                        className="relative h-24 overflow-hidden rounded-xl bg-slate-950 cursor-pointer border border-white/20 shadow-md hover:border-pink-400/60 transition"
-                                      >
-                                        <div
-                                          ref={(element) => {
-                                            liveRemoteVideoRefs.current[uid] = element;
-                                            if (element) playLiveRemoteVideoTrack(uid, activeTrack);
-                                          }}
-                                          className="absolute inset-0"
-                                        />
-                                        {isRemoteMicMuted && (
-                                          <span className="absolute top-1 left-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 border border-white/40 text-white shadow" title="Muted">
-                                            <MicOff className="h-2.5 w-2.5" />
-                                          </span>
-                                        )}
-                                        {isRemoteCamOff && (
-                                          <div className="absolute inset-0 z-1 flex flex-col items-center justify-center bg-slate-950 text-center p-1 overflow-hidden">
-                                            <img
-                                              src={getUserAvatarUrl({ name: name || "Co-host", avatar })}
-                                              alt=""
-                                              className="absolute inset-0 h-full w-full object-cover blur-xl scale-125 opacity-30 pointer-events-none"
-                                            />
-                                            <div className="absolute inset-0 bg-slate-950/60 pointer-events-none" />
-                                            <div className="relative z-10 flex flex-col items-center">
-                                              <div className="relative">
-                                                <img
-                                                  src={getUserAvatarUrl({ name: name || "Co-host", avatar })}
-                                                  alt={name || "Co-host"}
-                                                  className="h-10 w-10 rounded-full object-cover border-2 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]"
-                                                />
-                                                <span className="absolute bottom-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 border border-slate-900 text-white shadow">
-                                                  <CameraOff className="h-2.5 w-2.5" />
-                                                </span>
-                                              </div>
-                                              <span className="mt-1 max-w-[76px] truncate text-[8px] font-black text-amber-200 drop-shadow">
-                                                {name || "Co-host"}
-                                              </span>
-                                              <span className="mt-0.5 inline-flex items-center gap-0.5 rounded-full bg-rose-600/90 border border-rose-400/50 px-1.5 py-0.2 text-[6.5px] font-black text-white shadow">
-                                                <CameraOff className="h-1.5 w-1.5" /> Cam Off
-                                              </span>
-                                            </div>
-                                          </div>
-                                        )}
-                                        {cohostCoins > 0 && (
-                                          <span className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-full bg-amber-500/90 border border-amber-300/80 px-1.5 py-0.5 text-[7px] font-black text-slate-950 shadow-md">
-                                            🪙 {cohostCoins}
-                                          </span>
-                                        )}
-                                        <span className="absolute bottom-0.5 left-0.5 z-10 rounded bg-black/70 px-1 py-0.5 text-[6px] font-black text-white">
-                                          {name || `Guest ${uid}`}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })()}
                             {isStreamCameraOff && (
                               <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 text-center select-none z-10 overflow-hidden">
                                 <img
@@ -22964,6 +22840,144 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
 
                             {/* Real cinema vignette overlay to highlight interface items */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/75 pointer-events-none" />
+                          </div>
+
+                          {/* Top-Level Co-Host Tiles Overlay Layer (z-[60] above HUD & comments) */}
+                          <div className="absolute inset-0 z-[60] pointer-events-none overflow-hidden">
+                            {(() => {
+                              const hostIdNum = Number(activeLiveRoom?.hostId ?? 0);
+                              const myIdNum = Number(getCurrentUserId() ?? 0);
+
+                              const map = new Map<string, { uid: string; name: string; avatar: string | null; track: any | null }>();
+
+                              (liveCohosts || []).forEach((c: any) => {
+                                const uidStr = String(c?.userId ?? c?.user_id ?? c?.user?.id ?? c?.id ?? "").trim();
+                                const uidNum = Number(uidStr);
+                                if (!uidStr) return;
+                                if (hostIdNum && uidNum === hostIdNum) return;
+                                if (myIdNum && uidNum === myIdNum) return;
+                                map.set(uidStr, {
+                                  uid: uidStr,
+                                  name: c.name || `Guest ${uidStr}`,
+                                  avatar: c.avatar || null,
+                                  track: liveRemoteVideoTracksRef.current[uidStr] || null,
+                                });
+                              });
+
+                              (liveRemoteVideos || []).forEach((v) => {
+                                const uidStr = String(v.uid ?? "").trim();
+                                const uidNum = Number(uidStr);
+                                if (!uidStr) return;
+                                if (hostIdNum && uidNum === hostIdNum) return;
+                                if (myIdNum && uidNum === myIdNum) return;
+                                if (!map.has(uidStr)) {
+                                  map.set(uidStr, {
+                                    uid: uidStr,
+                                    name: v.name || getRemoteCohostMeta(uidStr).name,
+                                    avatar: v.avatar || getRemoteCohostMeta(uidStr).avatar,
+                                    track: v.track || liveRemoteVideoTracksRef.current[uidStr] || null,
+                                  });
+                                } else {
+                                  const existing = map.get(uidStr)!;
+                                  if (v.track && !existing.track) {
+                                    existing.track = v.track;
+                                  }
+                                }
+                              });
+
+                              const hostCohostVideos = Array.from(map.values());
+                              if (hostCohostVideos.length === 0) return null;
+
+                              return (
+                                <div className="pointer-events-auto absolute right-3 bottom-[78px] z-[60] grid w-20 grid-cols-1 gap-1.5">
+                                  {hostCohostVideos.map(({ uid, name, avatar, track }) => {
+                                    const activeTrack = track || liveRemoteVideoTracksRef.current[uid];
+                                    const cohostCoins = partySeatSessionCoins[Number(uid)] || 0;
+                                    const myCurrentUidStr = String(getCurrentUserId() || "");
+                                    const isRemoteMicMuted = remoteMutedAudioUids.includes(String(uid)) || (String(uid) === myCurrentUidStr && isStreamMicMuted);
+                                    const isRemoteCamOff = !activeTrack || remoteCameraOffUids.includes(String(uid)) || (String(uid) === myCurrentUidStr && isStreamCameraOff);
+
+                                    return (
+                                      <div
+                                        key={`host-remote-${uid}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const gId = Number(uid);
+                                          setCohostManageUser({
+                                            userId: gId,
+                                            name: name || `Guest ${gId}`,
+                                            avatar: avatar || null,
+                                          });
+                                        }}
+                                        onTouchEnd={(e) => {
+                                          e.stopPropagation();
+                                          const gId = Number(uid);
+                                          setCohostManageUser({
+                                            userId: gId,
+                                            name: name || `Guest ${gId}`,
+                                            avatar: avatar || null,
+                                          });
+                                        }}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label="Manage or gift co-host"
+                                        title="Tap to manage co-host"
+                                        className="relative h-24 overflow-hidden rounded-xl bg-slate-950 cursor-pointer border border-white/20 shadow-md hover:border-pink-400/60 transition pointer-events-auto z-[60]"
+                                      >
+                                        <div
+                                          ref={(element) => {
+                                            liveRemoteVideoRefs.current[uid] = element;
+                                            if (element) playLiveRemoteVideoTrack(uid, activeTrack);
+                                          }}
+                                          className="absolute inset-0"
+                                        />
+                                        {isRemoteMicMuted && (
+                                          <span className="absolute top-1 left-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 border border-white/40 text-white shadow" title="Muted">
+                                            <MicOff className="h-2.5 w-2.5" />
+                                          </span>
+                                        )}
+                                        {isRemoteCamOff && (
+                                          <div className="absolute inset-0 z-1 flex flex-col items-center justify-center bg-slate-950 text-center p-1 overflow-hidden">
+                                            <img
+                                              src={getUserAvatarUrl({ name: name || "Co-host", avatar })}
+                                              alt=""
+                                              className="absolute inset-0 h-full w-full object-cover blur-xl scale-125 opacity-30 pointer-events-none"
+                                            />
+                                            <div className="absolute inset-0 bg-slate-950/60 pointer-events-none" />
+                                            <div className="relative z-10 flex flex-col items-center">
+                                              <div className="relative">
+                                                <img
+                                                  src={getUserAvatarUrl({ name: name || "Co-host", avatar })}
+                                                  alt={name || "Co-host"}
+                                                  className="h-10 w-10 rounded-full object-cover border-2 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]"
+                                                />
+                                                <span className="absolute bottom-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 border border-slate-900 text-white shadow">
+                                                  <CameraOff className="h-2.5 w-2.5" />
+                                                </span>
+                                              </div>
+                                              <span className="mt-1 max-w-[76px] truncate text-[8px] font-black text-amber-200 drop-shadow">
+                                                {name || "Co-host"}
+                                              </span>
+                                              <span className="mt-0.5 inline-flex items-center gap-0.5 rounded-full bg-rose-600/90 border border-rose-400/50 px-1.5 py-0.2 text-[6.5px] font-black text-white shadow">
+                                                <CameraOff className="h-1.5 w-1.5" /> Cam Off
+                                              </span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {cohostCoins > 0 && (
+                                          <span className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-full bg-amber-500/90 border border-amber-300/80 px-1.5 py-0.5 text-[7px] font-black text-slate-950 shadow-md">
+                                            🪙 {cohostCoins}
+                                          </span>
+                                        )}
+                                        <span className="absolute bottom-0.5 left-0.5 z-10 rounded bg-black/70 px-1 py-0.5 text-[6px] font-black text-white">
+                                          {name || `Guest ${uid}`}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           {/* Top Stream Header HUD Overlay */}
@@ -23136,9 +23150,9 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                           </div>
 
                           {/* Bottom Section: Comments Feed list on Left side, Quick Hardware trigger on right */}
-                          <div className="relative z-10 flex flex-col gap-2 pointer-events-auto">
+                          <div className="relative z-10 flex flex-col gap-2 pointer-events-none">
                             {/* Comments Header: Hide / Show comments toggle button */}
-                            <div className="flex items-center gap-2 px-1">
+                            <div className="flex items-center gap-2 px-1 pointer-events-auto">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -23165,7 +23179,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                             {isLiveCommentsOpen && comments.length > 0 && (
                               <div
                                 ref={hostCommentsContainerRef}
-                                className="max-h-28 max-w-[calc(100%-92px)] space-y-1.5 overflow-y-auto p-1 scrollbar-none overscroll-contain"
+                                className="max-h-28 max-w-[calc(100%-92px)] space-y-1.5 overflow-y-auto p-1 scrollbar-none overscroll-contain pointer-events-auto"
                               >
                                 {comments.map((comment, index) => {
                                   const isGift = comment.badge === "Gift" || comment.text.includes("sent ");
@@ -23219,7 +23233,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                               </div>
                             )}
 
-                            <div className="flex items-center justify-between gap-1 px-1 shrink-0 w-full z-40 pb-1">
+                            <div className="flex items-center justify-between gap-1 px-1 shrink-0 w-full z-40 pb-1 pointer-events-auto">
                               {/* Always-visible input bar */}
                               <div className="relative flex min-w-0 flex-1 items-center gap-1">
                                 {isCommentInputPopupOpen ? (
