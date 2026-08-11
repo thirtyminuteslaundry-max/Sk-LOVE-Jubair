@@ -2567,6 +2567,8 @@ export default function App() {
 
   // Entry Effect Animation overlay state
   const seatFrameMapRef = useRef<Map<string, string>>(new Map());
+  const vacatedPartySeatsRef = useRef<Map<number, number>>(new Map());
+  const knownPartyRoomGuestsRef = useRef<Map<string, { id?: string | number; name: string; avatar?: string | null; role?: string }>>(new Map());
   const [activePartyEntryAnimation, setActivePartyEntryAnimation] = useState<{
     userName: string;
     userAvatar?: string | null;
@@ -8337,6 +8339,21 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       room.hostDisplayId = existingHostDisplayId;
     }
 
+    const roomMembersArr = room.audience || room.viewers || room.members || room.participants || room.guests || [];
+    if (Array.isArray(roomMembersArr)) {
+      roomMembersArr.forEach((u: any) => {
+        const uname = (u?.name || u?.userName || u?.nickname || u?.occupant || "").trim();
+        if (uname && uname.toLowerCase() !== "host" && uname.toLowerCase() !== "user" && uname.toLowerCase() !== "guest") {
+          knownPartyRoomGuestsRef.current.set(uname.toLowerCase(), {
+            id: u?.id || u?.userId,
+            name: uname,
+            avatar: u?.avatar || u?.icon || u?.avatarUrl,
+            role: "Audience",
+          });
+        }
+      });
+    }
+
     setActivePartyRoom(room);
     // Batch 2: read host-broadcast theme code (host applies to all viewers).
     const hasThemeField =
@@ -8513,6 +8530,21 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         } as any;
       }
     });
+
+    // FIX (Guest seats persistence): Retain known seated guests across polling
+    // if backend seats response temporarily omits them.
+    for (let idx = 1; idx < nextSeats.length; idx++) {
+      if (!nextSeats[idx].occupant) {
+        const prevSeat = partySeatsRef.current[idx];
+        const vacatedTs = vacatedPartySeatsRef.current.get(idx);
+        const isVacatedRecently = Boolean(vacatedTs && Date.now() - vacatedTs < 20000);
+        if (prevSeat && prevSeat.occupant && !isVacatedRecently) {
+          nextSeats[idx] = { ...prevSeat };
+        }
+      } else {
+        vacatedPartySeatsRef.current.delete(idx);
+      }
+    }
     // FIX: Keep our locally-known seat visible persistently until user explicitly leaves or another user takes it.
     const opt = optimisticPartySeatRef.current;
     const activeRoomId = room?.id ? Number(room.id) : null;
@@ -8664,6 +8696,14 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
               let entryAvatar = parts[2] ? decodeURIComponent(parts[2]) : null;
               let entryFrameId = parts[3] ? decodeURIComponent(parts[3]) : null;
 
+              if (entryUserName && entryUserName.toLowerCase() !== "host" && entryUserName.toLowerCase() !== "user" && entryUserName.toLowerCase() !== "guest") {
+                knownPartyRoomGuestsRef.current.set(entryUserName.trim().toLowerCase(), {
+                  name: entryUserName,
+                  avatar: entryAvatar,
+                  role: "Audience",
+                });
+              }
+
               const uKey = entryUserName ? entryUserName.trim().toLowerCase() : "";
               if (uKey && entryFrameId && entryFrameId !== "none" && entryFrameId !== "null") {
                 seatFrameMapRef.current.set(uKey, entryFrameId);
@@ -8701,19 +8741,30 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
               const actionOrName = parts[1];
               if (seatIdx >= 0 && seatIdx < 21) {
                 if (actionOrName === "LEAVE") {
-                  setPartySeats((prev) =>
-                    prev.map((s, idx) =>
+                  vacatedPartySeatsRef.current.set(seatIdx, Date.now());
+                  setPartySeats((prev) => {
+                    const arr = prev.map((s, idx) =>
                       idx === seatIdx ? { ...s, occupant: null, icon: null, userId: null } : s
-                    )
-                  );
+                    );
+                    partySeatsRef.current = arr;
+                    return arr;
+                  });
                 } else {
                   let occName = actionOrName;
                   try { occName = decodeURIComponent(occName); } catch {}
                   let occIcon = parts[2] ? decodeURIComponent(parts[2]) : null;
                   let occFrame = parts[3] ? decodeURIComponent(parts[3]) : null;
                   if (occName) {
-                    setPartySeats((prev) =>
-                      prev.map((s, idx) =>
+                    vacatedPartySeatsRef.current.delete(seatIdx);
+                    if (occName.toLowerCase() !== "host" && occName.toLowerCase() !== "user" && occName.toLowerCase() !== "guest") {
+                      knownPartyRoomGuestsRef.current.set(occName.trim().toLowerCase(), {
+                        name: occName,
+                        avatar: occIcon,
+                        role: "Audience",
+                      });
+                    }
+                    setPartySeats((prev) => {
+                      const arr = prev.map((s, idx) =>
                         idx === seatIdx
                           ? {
                               ...s,
@@ -8723,8 +8774,10 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                               frameId: occFrame || s.frameId,
                             }
                           : s
-                      )
-                    );
+                          );
+                      partySeatsRef.current = arr;
+                      return arr;
+                    });
                   }
                 }
               }
@@ -9269,6 +9322,15 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       hostMutedPartyUserIdsRef.current.clear();
       hostMutedPartyUserNamesRef.current.clear();
       hostMutedPartySeatsRef.current.clear();
+      vacatedPartySeatsRef.current.clear();
+      knownPartyRoomGuestsRef.current.clear();
+      if (registerName) {
+        knownPartyRoomGuestsRef.current.set(registerName.trim().toLowerCase(), {
+          name: registerName,
+          avatar: profileAvatarImg || null,
+          role: "Host",
+        });
+      }
       partySeatMuteOverrideRef.current = {};
       if (data?.data?.id) {
         locallyHostedPartyRoomIdsRef.current.add(Number(data.data.id));
@@ -9347,6 +9409,15 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     hostMutedPartyUserIdsRef.current.clear();
     hostMutedPartyUserNamesRef.current.clear();
     hostMutedPartySeatsRef.current.clear();
+    vacatedPartySeatsRef.current.clear();
+    knownPartyRoomGuestsRef.current.clear();
+    if (registerName) {
+      knownPartyRoomGuestsRef.current.set(registerName.trim().toLowerCase(), {
+        name: registerName,
+        avatar: profileAvatarImg || null,
+        role: "You (Audience)",
+      });
+    }
     partySeatMuteOverrideRef.current = {};
     setPartyRoomStatus("Joining party room...");
     try {
@@ -9868,6 +9939,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     partyMicMuteHoldRef.current = null;
     isPartyMicMutedRef.current = false;
     setIsPartyMicMuted(false);
+    vacatedPartySeatsRef.current.set(idx, Date.now());
     if (optimisticPartySeatRef.current?.seatIndex === idx) {
       optimisticPartySeatRef.current = null;
     }
@@ -10482,6 +10554,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
   const handleKickSeat = async (seatIndex: number) => {
     delete partySeatMuteOverrideRef.current[seatIndex];
     hostMutedPartySeatsRef.current.delete(seatIndex);
+    vacatedPartySeatsRef.current.set(seatIndex, Date.now());
     const updated = [...partySeats];
     const occupantName = updated[seatIndex].occupant;
     if (!occupantName) return;
@@ -16100,6 +16173,16 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                 }
               });
 
+              // 1b. Known room guests
+              if (knownPartyRoomGuestsRef.current) {
+                knownPartyRoomGuestsRef.current.forEach((g) => {
+                  if (g.name && !seatedNamesSet.has(g.name.toLowerCase()) && !seenNames.has(g.name.toLowerCase())) {
+                    seenNames.add(g.name.toLowerCase());
+                    audienceAvatars.push({ name: g.name, avatar: g.avatar });
+                  }
+                });
+              }
+
               // 2. Current user
               const myName = (registerName || "").trim();
               if (myName && !seatedNamesSet.has(myName.toLowerCase()) && !seenNames.has(myName.toLowerCase())) {
@@ -17428,6 +17511,20 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                     name: uname,
                     avatar: u?.avatar || u?.icon || u?.avatarUrl,
                     role: "Audience",
+                  });
+                }
+              });
+            }
+
+            // 1b. Known room guests from ref
+            if (knownPartyRoomGuestsRef.current) {
+              knownPartyRoomGuestsRef.current.forEach((g) => {
+                if (g.name && !seatedNamesSet.has(g.name.toLowerCase()) && !audienceMap.has(g.name.toLowerCase())) {
+                  audienceMap.set(g.name.toLowerCase(), {
+                    id: g.id,
+                    name: g.name,
+                    avatar: g.avatar || null,
+                    role: g.role || "Audience",
                   });
                 }
               });
