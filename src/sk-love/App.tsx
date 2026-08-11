@@ -8261,6 +8261,33 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     ) {
       locallyHostedPartyRoomIdsRef.current.add(roomIdForHostGuard);
     }
+    const isSelfHostRoom = Boolean(
+      (roomIdForHostGuard && locallyHostedPartyRoomIdsRef.current.has(roomIdForHostGuard)) ||
+      (hostIdForHostGuard && currentUserIdForHostGuard && hostIdForHostGuard === Number(currentUserIdForHostGuard))
+    );
+    const normalizedHostName =
+      room.hostName ??
+      room.host_name ??
+      room.hostUser?.name ??
+      room.host?.name ??
+      room.user?.name ??
+      (isSelfHostRoom ? (registerName || "Host") : null);
+    const normalizedHostAvatar =
+      room.hostAvatar ??
+      room.host_avatar ??
+      room.hostUser?.avatar ??
+      room.host_avatar_url ??
+      room.hostUser?.avatar_url ??
+      room.host?.avatar ??
+      room.user?.avatar ??
+      (isSelfHostRoom ? profileAvatarImg : null);
+    const normalizedHostId =
+      hostIdForHostGuard || (isSelfHostRoom && currentUserIdForHostGuard ? Number(currentUserIdForHostGuard) : null);
+
+    room.hostName = normalizedHostName || room.hostName || "Host";
+    room.hostAvatar = normalizedHostAvatar || room.hostAvatar;
+    room.hostId = normalizedHostId || room.hostId;
+
     setActivePartyRoom(room);
     // Batch 2: read host-broadcast theme code (host applies to all viewers).
     const hasThemeField =
@@ -8470,6 +8497,21 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
           } as any;
         }
       }
+    }
+    // FIX (Host visibility): Crown seat (seat 0) is the host seat. If seat 0 is empty from backend seats,
+    // populate it with room host info so EVERY viewer instantly sees the host on seat 0.
+    if (!nextSeats[0].occupant && normalizedHostName) {
+      const hostFrameToUse = room.hostFrame ?? room.host_frame ?? (isSelfHostRoom ? equippedAvatarFrame : null);
+      nextSeats[0] = {
+        seatNum: 1,
+        userId: normalizedHostId ? Number(normalizedHostId) : null,
+        occupant: normalizedHostName,
+        icon: normalizedHostAvatar || null,
+        muted: partySeatMuteOverrideRef.current[0]?.muted ?? false,
+        frameId: hostFrameToUse,
+        frame: hostFrameToUse,
+        avatarFrame: hostFrameToUse,
+      } as any;
     }
     const currentUserIdForPartyState = getCurrentUserId();
     const selfNameForPartyState = (registerName || "").trim();
@@ -16185,9 +16227,28 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                   // No auto-seating: when the audio board opens every seat
                   // (including the crown/top seat) stays EMPTY until someone
                   // actually clicks to sit. The host chooses their own seat.
-                  const _hostId = activePartyRoom?.hostId ? Number(activePartyRoom.hostId) : null;
-                  const effOccupant = seat.occupant || null;
-                  const effIcon = seat.icon || null;
+                  const _hostId = activePartyRoom?.hostId
+                    ? Number(activePartyRoom.hostId)
+                    : activePartyRoom?.host_id
+                    ? Number(activePartyRoom.host_id)
+                    : null;
+                  const _hostName =
+                    activePartyRoom?.hostName ??
+                    activePartyRoom?.host_name ??
+                    activePartyRoom?.hostUser?.name ??
+                    activePartyRoom?.host?.name ??
+                    activePartyRoom?.user?.name ??
+                    (isActivePartyHost ? (registerName || "Host") : null);
+                  const _hostAvatar =
+                    activePartyRoom?.hostAvatar ??
+                    activePartyRoom?.host_avatar ??
+                    activePartyRoom?.hostUser?.avatar ??
+                    activePartyRoom?.host?.avatar ??
+                    activePartyRoom?.user?.avatar ??
+                    (isActivePartyHost ? profileAvatarImg : null);
+
+                  const effOccupant = seat.occupant || (isCrown ? _hostName : null);
+                  const effIcon = seat.icon || (isCrown ? _hostAvatar : null);
                   // Private room: empty seats show locked (never the crown/host seat).
                   const isLocked =
                     !isCrown &&
