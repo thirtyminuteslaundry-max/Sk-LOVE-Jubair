@@ -8579,28 +8579,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         }
       }
     }
-    // FIX (Host visibility): Crown seat (seat 0) is the host seat. If seat 0 is empty or generic from backend seats,
-    // populate it with room host info so EVERY viewer instantly sees the host on seat 0.
-    const seat0Occ = nextSeats[0].occupant;
-    const isSeat0Generic = !seat0Occ || seat0Occ === "Host" || seat0Occ === "User" || seat0Occ === "Guest";
-    if (isSeat0Generic && normalizedHostName) {
-      const hostFrameToUse =
-        room.hostFrame ??
-        room.host_frame ??
-        room.hostUser?.avatarFrame ??
-        room.hostUser?.frame ??
-        (isSelfHostRoom ? equippedAvatarFrame : null);
-      nextSeats[0] = {
-        seatNum: 1,
-        userId: normalizedHostId ? Number(normalizedHostId) : nextSeats[0].userId,
-        occupant: normalizedHostName,
-        icon: normalizedHostAvatar || nextSeats[0].icon || null,
-        muted: partySeatMuteOverrideRef.current[0]?.muted ?? nextSeats[0].muted ?? false,
-        frameId: hostFrameToUse || nextSeats[0].frameId,
-        frame: hostFrameToUse || nextSeats[0].frame,
-        avatarFrame: hostFrameToUse || nextSeats[0].avatarFrame,
-      } as any;
-    }
+    // Clean seat state: Seats remain empty until explicitly taken by host or guest.
     const currentUserIdForPartyState = getCurrentUserId();
     const selfNameForPartyState = (registerName || "").trim();
     const holdActive = partyMicMuteHoldRef.current && Date.now() < partyMicMuteHoldRef.current.until;
@@ -10040,14 +10019,18 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       Boolean(_hostIdG) &&
       Boolean(_uidG) &&
       Number(_hostIdG) === Number(_uidG);
-    // Crown/host seat (index 0): a guest tapping it just views the host profile.
+    // Crown/host seat (index 0): can ONLY be taken by the room host.
     if (seatIndex === 0 && !_iAmHostG) {
-      void openPartyProfile({
-        userId: _hostIdG ? Number(_hostIdG) : null,
-        name: activePartyRoom?.hostName || "Host",
-        avatar: activePartyRoom?.hostAvatar || null,
-        seatIndex: 0,
-      });
+      if (partySeats[0]?.occupant) {
+        void openPartyProfile({
+          userId: _hostIdG ? Number(_hostIdG) : null,
+          name: partySeats[0].occupant,
+          avatar: partySeats[0].icon,
+          seatIndex: 0,
+        });
+      } else {
+        triggerSystemAnnouncement("এই সিটটি শুধুমাত্র হোস্টের জন্য সংরক্ষিত।");
+      }
       return;
     }
     // #13: Locally-tracked suspension gate (server enforces too once deployed).
@@ -10121,12 +10104,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       // Host can sit in ANY seat. If the host is already seated and taps another
       // empty seat, open the Lock/Unlock menu instead of moving.
       if (_iAmHostG) {
-        const myIdx = getMyPartySeatIndex();
-        if (myIdx >= 0 && myIdx !== seatIndex) {
-          setPartyEmptySeatMenu(seatIndex);
-          return;
-        }
-        await syncPartySeat(seatIndex, false); // not seated yet → take this seat
+        void joinPartySeatFree(seatIndex);
         return;
       }
       // Guest tap on an empty seat → open the Free / Gift chooser popup.
@@ -10214,21 +10192,11 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     const currentUser = registerName || "Zubair (User)";
 
     if (mode === "create") {
-      if (!updated[0].occupant) {
-        updated[0].occupant = currentUser;
-        updated[0].icon = "🤵";
-        setPartySeats(updated);
-      }
       triggerSystemAnnouncement("Party room opened. Guests can join microphone seats.");
       return;
     }
 
     const displayName = user?.name || currentUser;
-    if (!updated[0].occupant) {
-      updated[0].occupant = displayName;
-      updated[0].icon = user?.avatar || "🎙️";
-    }
-    setPartySeats(updated);
     triggerSystemAnnouncement(`${displayName}'s party room opened.`);
   };
 
@@ -16486,8 +16454,8 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                     activePartyRoom?.user?.avatar ??
                     (isActivePartyHost ? profileAvatarImg : null);
 
-                  const effOccupant = seat.occupant || (isCrown ? _hostName : null);
-                  const effIcon = seat.icon || (isCrown ? _hostAvatar : null);
+                  const effOccupant = seat.occupant;
+                  const effIcon = seat.icon;
                   // Private room: empty seats show locked (never the crown/host seat).
                   const isLocked =
                     !isCrown &&
