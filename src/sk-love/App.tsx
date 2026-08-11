@@ -23173,7 +23173,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                   return (
                                     <div
                                       key={`host-overlay-comment-${comment.id || index}`}
-                                      className={`backdrop-blur-md px-2.5 py-1 rounded-2xl border text-xs text-white flex flex-col gap-0.5 w-fit max-w-[92%] shadow-md ${
+                                      className={`backdrop-blur-md px-2.5 py-1 rounded-2xl border text-xs text-white flex flex-col gap-0.5 w-fit max-w-full shadow-md ${
                                         isGift
                                           ? "bg-gradient-to-r from-amber-600/90 via-pink-600/90 to-purple-600/90 border-amber-300/80 shadow-[0_0_12px_rgba(251,191,36,0.6)] font-bold animate-pulse"
                                           : isJoin
@@ -23187,16 +23187,16 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                           <span className="truncate">Replying to @{comment.replyTo.name}: "{comment.replyTo.text}"</span>
                                         </div>
                                       )}
-                                      <div className="flex items-center gap-1.5 min-w-0">
+                                      <div className="flex items-start gap-1.5 min-w-0">
                                         <img
                                           src={getUserAvatarUrl({ name: comment.name, avatar: comment.avatar })}
                                           alt=""
-                                          className="h-5 w-5 rounded-full object-cover border border-amber-300/40 shrink-0"
+                                          className="h-5 w-5 rounded-full object-cover border border-amber-300/40 shrink-0 mt-0.5"
                                         />
-                                        <span className="font-bold text-amber-200 leading-tight truncate max-w-[85px] drop-shadow">
+                                        <span className="font-bold text-amber-200 leading-tight truncate max-w-[85px] drop-shadow shrink-0">
                                           {comment.name}:
                                         </span>
-                                        <span className="text-white font-medium leading-tight break-words drop-shadow flex-1">
+                                        <span className="text-white font-medium leading-tight break-words whitespace-normal drop-shadow min-w-0 flex-1">
                                           {renderFormattedCommentText(comment.text)}
                                         </span>
                                         {!isGift && !isJoin && (
@@ -24736,7 +24736,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                 return (
                                   <div
                                     key={comment.id || index}
-                                    className={`backdrop-blur-md px-2.5 py-1 rounded-2xl border text-xs text-white flex flex-col gap-0.5 w-fit max-w-[92%] shadow-md ${
+                                    className={`backdrop-blur-md px-2.5 py-1 rounded-2xl border text-xs text-white flex flex-col gap-0.5 w-fit max-w-full shadow-md ${
                                       isGift
                                         ? "bg-gradient-to-r from-amber-600/90 via-pink-600/90 to-purple-600/90 border-amber-300/80 shadow-[0_0_12px_rgba(251,191,36,0.6)] font-bold animate-pulse"
                                         : isJoin
@@ -24750,16 +24750,16 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                                         <span className="truncate">Replying to @{comment.replyTo.name}: "{comment.replyTo.text}"</span>
                                       </div>
                                     )}
-                                    <div className="flex items-center gap-1.5 min-w-0">
+                                    <div className="flex items-start gap-1.5 min-w-0">
                                       <img
                                         src={getUserAvatarUrl({ name: comment.name, avatar: comment.avatar })}
                                         alt=""
-                                        className="h-5 w-5 rounded-full object-cover border border-amber-300/40 shrink-0"
+                                        className="h-5 w-5 rounded-full object-cover border border-amber-300/40 shrink-0 mt-0.5"
                                       />
-                                      <span className="font-bold text-amber-200 leading-tight truncate max-w-[85px] drop-shadow">
+                                      <span className="font-bold text-amber-200 leading-tight truncate max-w-[85px] drop-shadow shrink-0">
                                         {comment.name}:
                                       </span>
-                                      <span className="text-white font-medium leading-tight break-words drop-shadow flex-1">
+                                      <span className="text-white font-medium leading-tight break-words whitespace-normal drop-shadow min-w-0 flex-1">
                                         {renderFormattedCommentText(comment.text)}
                                       </span>
                                       {!isGift && !isJoin && (
