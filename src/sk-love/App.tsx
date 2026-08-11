@@ -8633,6 +8633,41 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         s.muted = partySeatMuteOverrideRef.current[idx].muted;
       }
     });
+
+    // FIX (Single-seat rule): Ensure no user occupies multiple seats simultaneously.
+    const userSeatMap = new Map<string, number>();
+    const optSeat = optimisticPartySeatRef.current;
+    if (optSeat && optSeat.seatIndex >= 0 && optSeat.seatIndex < nextSeats.length) {
+      const optUserKey = optSeat.userId
+        ? `uid:${optSeat.userId}`
+        : (optSeat.occupant ? `name:${optSeat.occupant.trim().toLowerCase()}` : null);
+      if (optUserKey) {
+        userSeatMap.set(optUserKey, optSeat.seatIndex);
+      }
+    }
+
+    for (let i = 0; i < nextSeats.length; i++) {
+      const s = nextSeats[i];
+      if (!s || (!s.occupant && !s.userId)) continue;
+      const userKey = s.userId
+        ? `uid:${s.userId}`
+        : (s.occupant ? `name:${String(s.occupant).trim().toLowerCase()}` : null);
+      if (!userKey) continue;
+
+      if (!userSeatMap.has(userKey)) {
+        userSeatMap.set(userKey, i);
+      } else {
+        const keepIdx = userSeatMap.get(userKey)!;
+        if (keepIdx !== i) {
+          nextSeats[i] = {
+            ...nextSeats[i],
+            occupant: null,
+            icon: null,
+            userId: null,
+          };
+        }
+      }
+    }
     partySeatsRef.current = nextSeats;
     setPartySeats(nextSeats);
     // #11: Pick up transient emoji reactions the backend carries per seat so
@@ -9564,6 +9599,22 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       const currentUserId = getCurrentUserId();
       const selfName = registerName || "You";
       const selfIcon = profileAvatarImg || null;
+
+      // Auto-vacate old seat if changing seats
+      const myOldIdx = getMyPartySeatIndex();
+      if (myOldIdx >= 0 && myOldIdx !== seatIndex) {
+        vacatedPartySeatsRef.current.set(myOldIdx, Date.now());
+        setPartySeats((prev) => {
+          const arr = prev.map((s, idx) => idx === myOldIdx ? { ...s, occupant: null, icon: null, userId: null } : s);
+          partySeatsRef.current = arr;
+          return arr;
+        });
+        if (activePartyRoom?.id) {
+          void api.post(`/api/party-rooms/${activePartyRoom.id}/chat`, { text: `[SEAT:${myOldIdx}:LEAVE]` }).catch(() => undefined);
+          void api.post(`/api/party-rooms/${activePartyRoom.id}/seats/${myOldIdx + 1}/leave`).catch(() => undefined);
+        }
+      }
+
       const isSelfMutedByHost = Boolean(
         (currentUserId && hostMutedPartyUserIdsRef.current.has(Number(currentUserId))) ||
         (selfName && hostMutedPartyUserNamesRef.current.has(String(selfName).trim().toLowerCase()))
@@ -9654,6 +9705,22 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     const currentUserId = getCurrentUserId();
     const selfName = registerName || "You";
     const selfIcon = profileAvatarImg || avatarGift.image || avatarGift.icon;
+
+    // Auto-vacate old seat if changing seats
+    const myOldIdx = getMyPartySeatIndex();
+    if (myOldIdx >= 0 && myOldIdx !== seatIndex) {
+      vacatedPartySeatsRef.current.set(myOldIdx, Date.now());
+      setPartySeats((prev) => {
+        const arr = prev.map((s, idx) => idx === myOldIdx ? { ...s, occupant: null, icon: null, userId: null } : s);
+        partySeatsRef.current = arr;
+        return arr;
+      });
+      if (activePartyRoom?.id) {
+        void api.post(`/api/party-rooms/${activePartyRoom.id}/chat`, { text: `[SEAT:${myOldIdx}:LEAVE]` }).catch(() => undefined);
+        void api.post(`/api/party-rooms/${activePartyRoom.id}/seats/${myOldIdx + 1}/leave`).catch(() => undefined);
+      }
+    }
+
     optimisticPartySeatRef.current = {
       roomId: activePartyRoom?.id ? Number(activePartyRoom.id) : null,
       seatIndex,
@@ -9793,6 +9860,22 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     if (!activePartyRoom?.id) return;
     const currentUserId = getCurrentUserId();
     const selfName = registerName || "You";
+
+    // Auto-vacate old seat if changing seats
+    const myOldIdx = getMyPartySeatIndex();
+    if (myOldIdx >= 0 && myOldIdx !== seatIndex) {
+      vacatedPartySeatsRef.current.set(myOldIdx, Date.now());
+      setPartySeats((prev) => {
+        const arr = prev.map((s, idx) => idx === myOldIdx ? { ...s, occupant: null, icon: null, userId: null } : s);
+        partySeatsRef.current = arr;
+        return arr;
+      });
+      if (activePartyRoom?.id) {
+        void api.post(`/api/party-rooms/${activePartyRoom.id}/chat`, { text: `[SEAT:${myOldIdx}:LEAVE]` }).catch(() => undefined);
+        void api.post(`/api/party-rooms/${activePartyRoom.id}/seats/${myOldIdx + 1}/leave`).catch(() => undefined);
+      }
+    }
+
     optimisticPartySeatRef.current = {
       roomId: activePartyRoom?.id ? Number(activePartyRoom.id) : null,
       seatIndex,
