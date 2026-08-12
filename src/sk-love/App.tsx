@@ -8265,7 +8265,8 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     }
     const isSelfHostRoom = Boolean(
       (roomIdForHostGuard && locallyHostedPartyRoomIdsRef.current.has(roomIdForHostGuard)) ||
-      (hostIdForHostGuard && currentUserIdForHostGuard && hostIdForHostGuard === Number(currentUserIdForHostGuard))
+      (hostIdForHostGuard && currentUserIdForHostGuard && hostIdForHostGuard === Number(currentUserIdForHostGuard)) ||
+      (room?.hostName && registerName && room.hostName.trim().toLowerCase() === registerName.trim().toLowerCase())
     );
     const existingHostName =
       activePartyRoom?.hostName && activePartyRoom.hostName !== "Host"
@@ -8289,10 +8290,12 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       room.creator?.name ??
       (isSelfHostRoom ? (registerName || "Host") : null);
 
-    const normalizedHostName =
-      rawHostName && rawHostName !== "Host"
-        ? rawHostName
-        : (existingHostName || rawHostName || "Host");
+    let normalizedHostName =
+      isSelfHostRoom && registerName
+        ? registerName
+        : (rawHostName && rawHostName !== "Host"
+          ? rawHostName
+          : (existingHostName || rawHostName || "Host"));
 
     const rawHostAvatar =
       room.hostAvatar ??
@@ -8311,7 +8314,10 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       room.creator?.avatar ??
       (isSelfHostRoom ? profileAvatarImg : null);
 
-    const normalizedHostAvatar = rawHostAvatar || existingHostAvatar || null;
+    let normalizedHostAvatar =
+      isSelfHostRoom && profileAvatarImg
+        ? profileAvatarImg
+        : (rawHostAvatar || existingHostAvatar || null);
 
     const rawHostId =
       hostIdForHostGuard ||
@@ -8331,6 +8337,25 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       rawHostId && Number(rawHostId) > 0
         ? Number(rawHostId)
         : (existingHostId ? Number(existingHostId) : null);
+
+    // Fallback: recover host details from room seats if missing
+    if ((normalizedHostName === "Host" || !normalizedHostAvatar) && Array.isArray(room.seats)) {
+      const hostSeatInSeats = room.seats.find((s: any) => {
+        const uid = s?.userId ?? s?.user_id ?? s?.uid ?? s?.user?.id;
+        return uid && normalizedHostId && Number(uid) === Number(normalizedHostId);
+      }) || room.seats[0];
+
+      if (hostSeatInSeats) {
+        const seatName = hostSeatInSeats.occupant || hostSeatInSeats.name || hostSeatInSeats.userName || hostSeatInSeats.user?.name;
+        const seatAvatar = hostSeatInSeats.icon || hostSeatInSeats.avatar || hostSeatInSeats.avatarUrl || hostSeatInSeats.user?.avatar;
+        if (normalizedHostName === "Host" && seatName && seatName !== "Host") {
+          normalizedHostName = seatName;
+        }
+        if (!normalizedHostAvatar && seatAvatar) {
+          normalizedHostAvatar = seatAvatar;
+        }
+      }
+    }
 
     room.hostName = normalizedHostName;
     room.hostAvatar = normalizedHostAvatar;
@@ -8566,23 +8591,6 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
             muted: partySeatMuteOverrideRef.current[idx]?.muted ?? backendSeat.muted ?? false,
           } as any;
         }
-      }
-    }
-
-    // Ensure Room Host always appears on Crown Seat (index 0) unless host explicitly vacated
-    if (!nextSeats[0]?.occupant && !vacatedPartySeatsRef.current.has(0)) {
-      const hId = room?.hostId ?? room?.host_id ?? room?.hostUser?.id ?? room?.host?.id ?? null;
-      const rawHName = room?.hostName ?? room?.host_name ?? room?.hostUser?.name ?? room?.host?.name ?? room?.user?.name ?? null;
-      const hName = (rawHName && rawHName !== "Host") ? rawHName : (rawHName || (isActivePartyHost ? (registerName || "Host") : null));
-      const hAvatar = room?.hostAvatar ?? room?.host_avatar ?? room?.hostUser?.avatar ?? room?.host?.avatar ?? room?.user?.avatar ?? (isActivePartyHost ? profileAvatarImg : null);
-      if (hName || hId) {
-        nextSeats[0] = {
-          ...nextSeats[0],
-          userId: hId ? Number(hId) : (nextSeats[0]?.userId ?? null),
-          occupant: hName || "Host",
-          icon: hAvatar || (nextSeats[0]?.icon ?? null),
-          muted: false,
-        } as any;
       }
     }
 
@@ -9587,6 +9595,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       const myOldIdx = getMyPartySeatIndex();
       if (myOldIdx >= 0 && myOldIdx !== seatIndex) {
         vacatedPartySeatsRef.current.set(myOldIdx, Date.now());
+        vacatedPartySeatsRef.current.delete(seatIndex);
         setPartySeats((prev) => {
           const arr = prev.map((s, idx) => idx === myOldIdx ? { ...s, occupant: null, icon: null, userId: null } : s);
           partySeatsRef.current = arr;
@@ -9594,8 +9603,9 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         });
         if (activePartyRoom?.id) {
           void api.post(`/api/party-rooms/${activePartyRoom.id}/chat`, { text: `[SEAT:${myOldIdx}:LEAVE]` }).catch(() => undefined);
-          void api.post(`/api/party-rooms/${activePartyRoom.id}/seats/${myOldIdx + 1}/leave`).catch(() => undefined);
         }
+      } else {
+        vacatedPartySeatsRef.current.delete(seatIndex);
       }
 
       const isSelfMutedByHost = Boolean(
@@ -9693,6 +9703,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     const myOldIdx = getMyPartySeatIndex();
     if (myOldIdx >= 0 && myOldIdx !== seatIndex) {
       vacatedPartySeatsRef.current.set(myOldIdx, Date.now());
+      vacatedPartySeatsRef.current.delete(seatIndex);
       setPartySeats((prev) => {
         const arr = prev.map((s, idx) => idx === myOldIdx ? { ...s, occupant: null, icon: null, userId: null } : s);
         partySeatsRef.current = arr;
@@ -9700,8 +9711,9 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       });
       if (activePartyRoom?.id) {
         void api.post(`/api/party-rooms/${activePartyRoom.id}/chat`, { text: `[SEAT:${myOldIdx}:LEAVE]` }).catch(() => undefined);
-        void api.post(`/api/party-rooms/${activePartyRoom.id}/seats/${myOldIdx + 1}/leave`).catch(() => undefined);
       }
+    } else {
+      vacatedPartySeatsRef.current.delete(seatIndex);
     }
 
     optimisticPartySeatRef.current = {
@@ -9848,6 +9860,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
     const myOldIdx = getMyPartySeatIndex();
     if (myOldIdx >= 0 && myOldIdx !== seatIndex) {
       vacatedPartySeatsRef.current.set(myOldIdx, Date.now());
+      vacatedPartySeatsRef.current.delete(seatIndex);
       setPartySeats((prev) => {
         const arr = prev.map((s, idx) => idx === myOldIdx ? { ...s, occupant: null, icon: null, userId: null } : s);
         partySeatsRef.current = arr;
@@ -9855,8 +9868,9 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       });
       if (activePartyRoom?.id) {
         void api.post(`/api/party-rooms/${activePartyRoom.id}/chat`, { text: `[SEAT:${myOldIdx}:LEAVE]` }).catch(() => undefined);
-        void api.post(`/api/party-rooms/${activePartyRoom.id}/seats/${myOldIdx + 1}/leave`).catch(() => undefined);
       }
+    } else {
+      vacatedPartySeatsRef.current.delete(seatIndex);
     }
 
     optimisticPartySeatRef.current = {
@@ -13613,10 +13627,11 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
   // ╔══════════════════════════════════════════════════════════════════════╗
   // ║  🎉 PARTY ROOM — রেন্ডার-টাইম derived values: হোস্ট চেক ও ডিফল্ট সিট-অ্যাভাটার লিস্ট
   // ╚══════════════════════════════════════════════════════════════════════╝
-  const isActivePartyHost =
-    Boolean(activePartyRoom?.hostId) &&
-    currentUserIdForView !== null &&
-    Number(activePartyRoom.hostId) === Number(currentUserIdForView);
+  const isActivePartyHost = Boolean(
+    (activePartyRoom?.id && locallyHostedPartyRoomIdsRef.current.has(Number(activePartyRoom.id))) ||
+    (activePartyRoom?.hostId && currentUserIdForView !== null && Number(activePartyRoom.hostId) === Number(currentUserIdForView)) ||
+    (registerName && activePartyRoom?.hostName && activePartyRoom.hostName.trim().toLowerCase() === registerName.trim().toLowerCase())
+  );
 
   // FIX: Resolve host display ID from DB with fallback to a stable default
   const resolveHostDisplayId = (room: any): string => {
@@ -16119,15 +16134,35 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
             >
               <div className="flex min-w-0 items-center gap-2 rounded-full bg-[#0b0620] pl-1 pr-3 py-[3px] w-full">
                 {(() => {
-                  const displayHostName =
-                    activePartyRoom?.hostName && activePartyRoom.hostName !== "Host"
-                      ? activePartyRoom.hostName
-                      : (partySeats?.[0]?.occupant || (isActivePartyHost ? registerName : "Host"));
-                  const displayHostAvatar =
-                    activePartyRoom?.hostAvatar ||
-                    partySeats?.[0]?.icon ||
-                    partySeats?.[0]?.avatar ||
-                    (isActivePartyHost ? profileAvatarImg : null);
+                  const displayHostName = (() => {
+                    if (isActivePartyHost) return registerName || activePartyRoom?.hostName || "Host";
+                    if (activePartyRoom?.hostName && activePartyRoom.hostName !== "Host") return activePartyRoom.hostName;
+                    if (activePartyRoom?.host_name && activePartyRoom.host_name !== "Host") return activePartyRoom.host_name;
+                    if (activePartyRoom?.hostUser?.name) return activePartyRoom.hostUser.name;
+                    if (activePartyRoom?.user?.name) return activePartyRoom.user.name;
+                    const hostSeat = partySeats?.find(s => s && s.occupant && (
+                      (activePartyRoom?.hostId && s.userId && Number(s.userId) === Number(activePartyRoom.hostId)) ||
+                      (s.occupant && activePartyRoom?.hostName && s.occupant.trim().toLowerCase() === activePartyRoom.hostName.trim().toLowerCase())
+                    ));
+                    if (hostSeat?.occupant) return hostSeat.occupant;
+                    if (partySeats?.[0]?.occupant) return partySeats[0].occupant;
+                    return "Host";
+                  })();
+
+                  const displayHostAvatar = (() => {
+                    if (isActivePartyHost) return profileAvatarImg || activePartyRoom?.hostAvatar;
+                    if (activePartyRoom?.hostAvatar) return activePartyRoom.hostAvatar;
+                    if (activePartyRoom?.host_avatar) return activePartyRoom.host_avatar;
+                    if (activePartyRoom?.hostUser?.avatar) return activePartyRoom.hostUser.avatar;
+                    if (activePartyRoom?.user?.avatar) return activePartyRoom.user.avatar;
+                    const hostSeat = partySeats?.find(s => s && (s.icon || s.avatar) && (
+                      (activePartyRoom?.hostId && s.userId && Number(s.userId) === Number(activePartyRoom.hostId)) ||
+                      (s.occupant && activePartyRoom?.hostName && s.occupant.trim().toLowerCase() === activePartyRoom.hostName.trim().toLowerCase())
+                    ));
+                    if (hostSeat?.icon || hostSeat?.avatar) return hostSeat.icon || hostSeat.avatar;
+                    if (partySeats?.[0]?.icon || partySeats?.[0]?.avatar) return partySeats[0].icon || partySeats[0].avatar;
+                    return null;
+                  })();
                   return (
                     <>
                       <img
@@ -16458,8 +16493,8 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                     activePartyRoom?.user?.avatar ??
                     (isActivePartyHost ? profileAvatarImg : null);
 
-                  const effOccupant = seat.occupant || (isCrown && !vacatedPartySeatsRef.current.has(0) ? _hostName : null);
-                  const effIcon = seat.icon || (isCrown && !vacatedPartySeatsRef.current.has(0) ? _hostAvatar : null);
+                  const effOccupant = seat.occupant || null;
+                  const effIcon = seat.icon || null;
                   // Private room: empty seats show locked (never the crown/host seat).
                   const isLocked =
                     !isCrown &&
@@ -16468,9 +16503,7 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                   const _emojiRaw = seatEmojiOverlay[idx];
                   const emojiOverlay =
                     _emojiRaw && _emojiRaw.until > Date.now() ? _emojiRaw : null;
-                  const targetSeatUid = seat.userId
-                    ? Number(seat.userId)
-                    : (isCrown && _hostId ? Number(_hostId) : null);
+                  const targetSeatUid = seat.userId ? Number(seat.userId) : null;
                   const seatCoins = Math.max(
                     targetSeatUid ? (partySeatSessionCoins[targetSeatUid] || 0) : 0,
                     Number((seat as any).coins || 0),
@@ -16491,10 +16524,11 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                   const effectiveSeatMuted = Boolean(seat.muted || (isSelf && getEffectivePartyMicMuted()));
                   // Crown badge: only when the room host is actually seated here.
                   const isRoomHost = Boolean(
-                    seat.occupant &&
-                      _hostId != null &&
-                      seat.userId &&
-                      Number(seat.userId) === _hostId,
+                    seat.occupant && (
+                      (isSelf && isActivePartyHost) ||
+                      (_hostId != null && seat.userId && Number(seat.userId) === _hostId) ||
+                      (_hostName && seat.occupant && seat.occupant.trim().toLowerCase() === _hostName.trim().toLowerCase())
+                    )
                   );
                   return (
                     <div
@@ -30322,8 +30356,31 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                   tabIndex={0}
                 >
                   {(() => {
-                    const hostName = activePartyRoom?.hostName || partySeats?.[0]?.occupant || (isActivePartyHost ? registerName : "Host");
-                    const hostAvatar = activePartyRoom?.hostAvatar || partySeats?.[0]?.avatar || (isActivePartyHost ? profileAvatarImg : null);
+                    const hostName = (() => {
+                      if (isActivePartyHost) return registerName || activePartyRoom?.hostName || "Host";
+                      if (activePartyRoom?.hostName && activePartyRoom.hostName !== "Host") return activePartyRoom.hostName;
+                      if (activePartyRoom?.host_name && activePartyRoom.host_name !== "Host") return activePartyRoom.host_name;
+                      const hostSeat = partySeats?.find(s => s && s.occupant && (
+                        (activePartyRoom?.hostId && s.userId && Number(s.userId) === Number(activePartyRoom.hostId)) ||
+                        (s.occupant && activePartyRoom?.hostName && s.occupant.trim().toLowerCase() === activePartyRoom.hostName.trim().toLowerCase())
+                      ));
+                      if (hostSeat?.occupant) return hostSeat.occupant;
+                      if (partySeats?.[0]?.occupant) return partySeats[0].occupant;
+                      return "Host";
+                    })();
+
+                    const hostAvatar = (() => {
+                      if (isActivePartyHost) return profileAvatarImg || activePartyRoom?.hostAvatar;
+                      if (activePartyRoom?.hostAvatar) return activePartyRoom.hostAvatar;
+                      if (activePartyRoom?.host_avatar) return activePartyRoom.host_avatar;
+                      const hostSeat = partySeats?.find(s => s && (s.icon || s.avatar) && (
+                        (activePartyRoom?.hostId && s.userId && Number(s.userId) === Number(activePartyRoom.hostId)) ||
+                        (s.occupant && activePartyRoom?.hostName && s.occupant.trim().toLowerCase() === activePartyRoom.hostName.trim().toLowerCase())
+                      ));
+                      if (hostSeat?.icon || hostSeat?.avatar) return hostSeat.icon || hostSeat.avatar;
+                      if (partySeats?.[0]?.icon || partySeats?.[0]?.avatar) return partySeats[0].icon || partySeats[0].avatar;
+                      return null;
+                    })();
                     const avatarUrl = getUserAvatarUrl({ name: hostName, avatar: hostAvatar });
 
                     return (
