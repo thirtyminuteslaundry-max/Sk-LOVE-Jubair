@@ -8568,6 +8568,24 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         }
       }
     }
+
+    // Ensure Room Host always appears on Crown Seat (index 0) unless host explicitly vacated
+    if (!nextSeats[0]?.occupant && !vacatedPartySeatsRef.current.has(0)) {
+      const hId = room?.hostId ?? room?.host_id ?? room?.hostUser?.id ?? room?.host?.id ?? null;
+      const rawHName = room?.hostName ?? room?.host_name ?? room?.hostUser?.name ?? room?.host?.name ?? room?.user?.name ?? null;
+      const hName = (rawHName && rawHName !== "Host") ? rawHName : (rawHName || (isActivePartyHost ? (registerName || "Host") : null));
+      const hAvatar = room?.hostAvatar ?? room?.host_avatar ?? room?.hostUser?.avatar ?? room?.host?.avatar ?? room?.user?.avatar ?? (isActivePartyHost ? profileAvatarImg : null);
+      if (hName || hId) {
+        nextSeats[0] = {
+          ...nextSeats[0],
+          userId: hId ? Number(hId) : (nextSeats[0]?.userId ?? null),
+          occupant: hName || "Host",
+          icon: hAvatar || (nextSeats[0]?.icon ?? null),
+          muted: false,
+        } as any;
+      }
+    }
+
     const holdActive = partyMicMuteHoldRef.current && Date.now() < partyMicMuteHoldRef.current.until;
     const mySeat = nextSeats.find((seat) =>
       (seat.userId && currentUserIdForPartyState && Number(seat.userId) === Number(currentUserIdForPartyState)) ||
@@ -16440,8 +16458,8 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
                     activePartyRoom?.user?.avatar ??
                     (isActivePartyHost ? profileAvatarImg : null);
 
-                  const effOccupant = seat.occupant;
-                  const effIcon = seat.icon;
+                  const effOccupant = seat.occupant || (isCrown && !vacatedPartySeatsRef.current.has(0) ? _hostName : null);
+                  const effIcon = seat.icon || (isCrown && !vacatedPartySeatsRef.current.has(0) ? _hostAvatar : null);
                   // Private room: empty seats show locked (never the crown/host seat).
                   const isLocked =
                     !isCrown &&
