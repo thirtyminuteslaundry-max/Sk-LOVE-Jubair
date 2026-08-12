@@ -8429,10 +8429,8 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
         index = Number(seat.seatIndex);
       } else if (seat.seat_index !== undefined && seat.seat_index !== null) {
         index = Number(seat.seat_index);
-      } else if (seat.index !== undefined && seat.index !== null) {
-        index = Number(seat.index);
       } else {
-        const rawSeatNum = seat.seatNum ?? seat.seat_num ?? seat.seat_number ?? seat.number ?? seat.seat;
+        const rawSeatNum = seat.seatNum ?? seat.seat_num ?? seat.seat_number ?? seat.number ?? seat.seat ?? seat.index;
         if (rawSeatNum !== undefined && rawSeatNum !== null) {
           index = Number(rawSeatNum) - 1;
         } else if (i >= 0 && i < nextSeats.length) {
