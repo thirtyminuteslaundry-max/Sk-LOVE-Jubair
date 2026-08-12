@@ -8625,6 +8625,24 @@ const [isPartyGiftPopupOpen, setIsPartyGiftPopupOpen] = useState<boolean>(false)
       }
     });
 
+    // Preserve broadcast-received active seats across all viewers if polling returns incomplete/empty seats
+    (partySeatsRef.current || []).forEach((prevSeat, idx) => {
+      if (prevSeat?.occupant && !nextSeats[idx]?.occupant) {
+        const isVacated = vacatedPartySeatsRef.current.get(idx);
+        if (!isVacated || Date.now() - isVacated >= 8000) {
+          nextSeats[idx] = {
+            ...nextSeats[idx],
+            userId: prevSeat.userId ?? nextSeats[idx].userId,
+            occupant: prevSeat.occupant,
+            icon: prevSeat.icon || nextSeats[idx].icon,
+            frame: prevSeat.frame || nextSeats[idx].frame,
+            frameId: prevSeat.frameId || nextSeats[idx].frameId,
+            muted: prevSeat.muted ?? false,
+          } as any;
+        }
+      }
+    });
+
     // FIX (Single-seat rule): Ensure no user occupies multiple seats simultaneously.
     const seenUserIds = new Set<number>();
     const seenUserNames = new Set<string>();
